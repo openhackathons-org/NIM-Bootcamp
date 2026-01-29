@@ -169,3 +169,11 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Custom: Ignore notebook execution outputs
+workspace-nim-with-rag/jupyter_notebook/embed/
+workspace-nim-with-rag/jupyter_notebook/nim_llm_values.yaml
+workspace-nim-with-rag/jupyter_notebook/nim-llm-1.7.0.tgz
+
+# Mac 
+*.DS_Store

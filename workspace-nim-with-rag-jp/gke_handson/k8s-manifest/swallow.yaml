@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nim-swallow-autopilot-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nim-swallow-autopilot
+  template:
+    metadata:
+      labels:
+        app: nim-swallow-autopilot
+    spec:
+      initContainers:
+      - name: model-downloader
+        image: alpine/git:latest
+        env:
+        - name: GIT_LFS_SKIP_SMUDGE
+          value: "1"
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add git-lfs && \
+          git lfs install && \
+          git clone https://huggingface.co/tokyotech-llm/Llama-3.1-Swallow-8B-Instruct-v0.1 /models && \
+          cd /models && \
+          git lfs pull
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+
+      containers:
+      - name: nim-container
+        image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.8
+        env:
+        - name: NIM_MODEL_NAME
+          value: "/models"
+        - name: NIM_SERVED_MODEL_NAME
+          value: "llama-3.1-swallow-8b"
+        - name: NIM_MODEL_PROFILE
+          value: "vllm"
+        - name: NIM_ENABLE_KV_CACHE_REUSE
+          value: "1"
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+        - name: cache-storage
+          mountPath: /opt/nim/.cache
+
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-l4
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+
+      imagePullSecrets:
+      - name: ngc-docker-registry-secret
+
+      volumes:
+      - name: model-storage
+        emptyDir: {}
+      - name: cache-storage
+        emptyDir: {}
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nim-swallow-autopilot-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: nim-swallow-autopilot
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
